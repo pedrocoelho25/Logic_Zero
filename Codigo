@@ -1,0 +1,783 @@
+
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+
+
+
+// Joystick
+
+
+int joyX = A0;    
+int joyY = A1;      
+int joyButton = 12;
+
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+// Display de 7 segmentos
+const int SEG_G = 11;
+const int SEG_F = 10;
+const int SEG_A = 5;
+const int SEG_B = 6;
+const int SEG_E = 7;
+const int SEG_D = 8;
+const int SEG_C = 9;
+
+
+// Botoes
+const int btX = 4;
+const int btA = 3;
+const int btB = 2;
+
+
+// Variaveis do jogo
+int atual = 5;
+int contFase = 1;
+
+
+bool concluida = false;
+bool aguardandoSoltar = false;
+
+
+// Controle dos botoes
+const unsigned long debounce = 30;
+
+
+const int pinos[3] = {btX, btA, btB};
+int leituraAnterior[3] = {LOW, LOW, LOW};
+int estadoEstavel[3] = {LOW, LOW, LOW};
+unsigned long ultimaMudanca[3] = {0, 0, 0};
+
+
+bool cliqueX = false;
+bool cliqueA = false;
+bool cliqueB = false;
+
+
+// bool pra fase 6
+
+
+bool usouJoystick = false;
+bool usouBotao = false;
+bool joystickCentralizado = true;
+
+
+const int limiteInferior = 300;
+const int limiteSuperior = 700;
+
+
+// DISPLAY DE 7 SEGMENTOS
+
+
+void mudarNumero(int a, int b, int c, int d,
+                 int e, int f, int g) {
+  digitalWrite(SEG_A, a);
+  digitalWrite(SEG_B, b);
+  digitalWrite(SEG_C, c);
+  digitalWrite(SEG_D, d);
+  digitalWrite(SEG_E, e);
+  digitalWrite(SEG_F, f);
+  digitalWrite(SEG_G, g);
+}
+
+
+void Display(int numero) {
+  switch (numero) {
+    case 0: mudarNumero(0,0,0,0,0,0,1); break;
+    case 1: mudarNumero(1,0,0,1,1,1,1); break;
+    case 2: mudarNumero(0,0,1,0,0,1,0); break;
+    case 3: mudarNumero(0,0,0,0,1,1,0); break;
+    case 4: mudarNumero(1,0,0,1,1,0,0); break;
+    case 5: mudarNumero(0,1,0,0,1,0,0); break;
+    case 6: mudarNumero(0,1,0,0,0,0,0); break;
+    case 7: mudarNumero(0,0,0,1,1,1,1); break;
+    case 8: mudarNumero(0,0,0,0,0,0,0); break;
+    case 9: mudarNumero(0,0,0,0,1,0,0); break;
+    default: mudarNumero(1,1,1,1,1,1,1);
+  }
+}
+
+
+// ----------------------------------------
+// LCD
+// ----------------------------------------
+
+
+void centralizado(String texto, int linha) {
+  int espacos = (16 - texto.length()) / 2;
+
+
+  if (espacos < 0) espacos = 0;
+
+
+  lcd.setCursor(0, linha);
+  lcd.print("                ");
+
+
+  lcd.setCursor(espacos, linha);
+  lcd.print(texto);
+}
+
+
+// ----------------------------------------
+// LEITURA DOS BOTOES SEM DELAY
+// ----------------------------------------
+
+
+void lerBotoes() {
+  bool cliques[3] = {false, false, false};
+
+
+  for (int i = 0; i < 3; i++) {
+    int leitura = digitalRead(pinos[i]);
+
+
+    if (leitura != leituraAnterior[i]) {
+      ultimaMudanca[i] = millis();
+    }
+
+
+    if (millis() - ultimaMudanca[i] >= debounce) {
+      if (leitura != estadoEstavel[i]) {
+        estadoEstavel[i] = leitura;
+
+
+        if (leitura == HIGH) {
+          cliques[i] = true;
+        }
+      }
+    }
+
+
+    leituraAnterior[i] = leitura;
+  }
+
+
+  cliqueX = cliques[0];
+  cliqueA = cliques[1];
+  cliqueB = cliques[2];
+}
+
+
+// ----------------------------------------
+// INICIAR FASE
+// ----------------------------------------
+
+
+
+
+void iniciarFase() {
+  atual = 5;
+  concluida = false;
+  aguardandoSoltar = false;
+
+
+
+
+  if (contFase == 1) {
+    lcd.clear();
+    centralizado("LOGIC ZERO", 0);
+    centralizado("JOGO LOGICO", 1);
+    delay(2500);
+
+
+    lcd.clear();
+    centralizado("OBJETIVO:", 0);
+    centralizado("CHEGUE AO ZERO!", 1);
+    delay(3000);
+
+
+    lcd.clear();
+    centralizado("USE OS BOTOES", 0);
+    centralizado("A, B E X", 1);
+    delay(3000);
+  }
+
+
+  else if (contFase == 4) {
+    lcd.clear();
+    centralizado("NOVO DESAFIO!", 0);
+    centralizado("USE O JOYSTICK", 1);
+    delay(3000);
+  }
+
+
+  else if (contFase == 6) {
+    lcd.clear();
+    centralizado("DESAFIO FINAL!", 0);
+    centralizado("COMBINE COMANDOS", 1);
+    delay(3000);
+
+
+    lcd.clear();
+    centralizado("USE BOTOES", 0);
+    centralizado("E JOYSTICK!", 1);
+    delay(3000);
+  }
+
+
+  lcd.clear();
+  centralizado("LOGIC ZERO", 0);
+  centralizado("FASE " + String(contFase), 1);
+
+
+  Display(atual);
+}
+
+
+// ----------------------------------------
+// CONCLUIR FASE
+// ----------------------------------------
+
+
+void concluirFase() {
+  concluida = true;
+  aguardandoSoltar = true;
+
+
+  lcd.clear();
+  centralizado("FASE CONCLUIDA!", 0);
+  centralizado("PARABENS!", 1);
+}
+
+
+// ----------------------------------------
+// MENU DE CONCLUSAO
+// ----------------------------------------
+
+
+void menuConclusao() {
+  // Espera soltar os botoes antes
+  // de aceitar uma nova escolha.
+  if (aguardandoSoltar) {
+    if (estadoEstavel[0] == LOW &&
+        estadoEstavel[1] == LOW &&
+        estadoEstavel[2] == LOW) {
+
+
+      aguardandoSoltar = false;
+
+
+      lcd.clear();
+      centralizado("A: REINICIAR", 0);
+      centralizado("X: PROX. FASE", 1);
+    }
+    return;
+  }
+
+
+  if (cliqueA) {
+    iniciarFase();
+  }
+ 
+  else if (cliqueX) {
+   
+    if (contFase < 6) {
+      contFase++;
+      iniciarFase();
+    }
+  }
+  else if (contFase == 6) {
+    lcd.clear();
+    centralizado("JOGO CONCLUIDO",0);
+    centralizado("PARABENS! ",1);
+    delay(3000);
+
+
+    lcd.clear();
+    centralizado("DE SEU FEEDBACK",0);
+    centralizado("LEIA O QR CODE",1);
+     delay(3000);
+  }
+
+
+}
+
+
+// ----------------------------------------
+// FASE 1
+// ----------------------------------------
+
+
+void fase_1() {
+  if (cliqueX) {
+    atual = 7;
+  }
+
+
+  if (cliqueB) {
+    atual++;
+  }
+
+
+  if (cliqueA) {
+    atual--;
+  }
+
+
+  if (atual > 9) atual = 9;
+  if (atual < 0) atual = 0;
+
+
+  Display(atual);
+
+
+  if (atual == 0) {
+    concluirFase();
+  }
+}
+
+
+// ----------------------------------------
+// FASE 2
+// ----------------------------------------
+
+
+void fase_2() {
+  if (cliqueX) {
+    if (atual > 4) {
+      atual--;
+    }
+    else {
+      atual++;
+    }
+  }
+
+
+  if (cliqueB) {
+    if (atual != 7) {
+      atual--;
+    }
+    else {
+      atual = 7;
+    }
+  }
+
+
+  if (cliqueA) {
+    if (atual <= 2) {
+      atual++;
+    }
+  }
+
+
+  if (atual > 9) atual = 9;
+  if (atual < 0) atual = 0;
+
+
+  Display(atual);
+
+
+  if (atual == 0) {
+    concluirFase();
+  }
+}
+
+
+// ----------------------------------------
+// FASE 3
+// ----------------------------------------
+
+
+void fase_3() {
+  if (cliqueX) {
+    atual = 7;
+  }
+
+
+  if (cliqueB) {
+    if (atual > 2) {
+      atual--;
+    }
+    else {
+      atual += 3;
+    }
+  }
+
+
+  if (cliqueA) {
+    if (atual <= 2) {
+      atual--;
+    }
+    else {
+      atual++;
+    }
+  }
+
+
+  if (atual > 9) atual = 9;
+  if (atual < 0) atual = 0;
+
+
+  Display(atual);
+
+
+  if (atual == 0) {
+    concluirFase();
+  }
+}
+
+
+
+
+
+
+void fase_4(){
+
+
+  if (analogRead(A0) < 300) {
+  atual--;
+  delay(300);
+  }
+
+
+  if (analogRead(A0) > 700) {
+    atual++;
+    delay(300);
+  }
+
+
+
+
+
+
+    if (atual > 9) atual = 9;
+    if (atual < 0) atual = 0;
+
+
+
+
+    Display(atual);
+
+
+
+
+    if (atual == 0) {
+      concluirFase();
+    }
+
+
+
+
+}
+
+
+void fase_5(){
+  int eixoX = analogRead(A0);
+  int eixoY = analogRead(A1);
+  if (joystickCentralizado) {
+
+
+
+
+    // ESQUERDA
+    if (eixoX < limiteInferior) {
+
+
+
+
+      if (atual % 2 == 0) {
+        atual --;
+      }
+      else {
+        atual ++;
+      }
+      delay(300);
+
+
+      joystickCentralizado = false;
+    }
+
+
+
+
+    // DIREITA
+    else if (eixoX > limiteSuperior) {
+
+
+
+
+      if (atual < 5) {
+        atual += 2;
+      }
+      else {
+        atual --;
+      }
+     
+
+
+      joystickCentralizado = false;
+    }
+
+
+
+
+    // CIMA
+    else if (eixoY < limiteInferior) {
+
+
+
+
+      if (atual > 3) {
+        atual ++;
+      }
+
+
+
+
+      joystickCentralizado = false;
+    }
+
+
+
+
+    // BAIXO
+    else if (eixoY > limiteSuperior) {
+
+
+
+
+      if (atual % 2 == 0) {
+        atual ++;
+      }
+      else {
+        atual --;
+      }
+
+
+
+
+      joystickCentralizado = false;
+    }
+  }
+
+
+
+
+  // Aguarda o joystick retornar ao centro
+  if (eixoX >= limiteInferior &&
+      eixoX <= limiteSuperior &&
+      eixoY >= limiteInferior &&
+      eixoY <= limiteSuperior) {
+
+
+
+
+    joystickCentralizado = true;
+  }
+
+
+  // Limites do display
+  if (atual > 9) atual = 9;
+  if (atual < 0) atual = 0;
+
+
+  Display(atual);
+
+
+  if (atual == 0) {
+    concluirFase();
+  }
+}
+
+
+
+
+void fase_6(){
+ 
+  int eixoX = analogRead(joyX);
+  int eixoY = analogRead(joyY);
+
+
+  // Reiniciar desafio
+  if (cliqueX) {
+    atual = 5;
+    usouJoystick = false;
+    usouBotao = false;
+    joystickCentralizado = false;
+    Display(atual);
+    return;
+  }
+
+
+  // Verifica se o joystick voltou ao centro
+  if (eixoX >= 400 && eixoX <= 600 &&
+      eixoY >= 400 && eixoY <= 600) {
+    joystickCentralizado = true;
+  }
+
+
+  // Permite apenas um movimento por vez
+  if (joystickCentralizado) {
+
+
+    // Prioridade para o eixo de maior deslocamento
+    int deslocX = abs(eixoX - 512);
+    int deslocY = abs(eixoY - 512);
+
+
+    if (deslocX >= deslocY) {
+
+
+      if (eixoX < 300) {
+        atual -= 2;
+        usouJoystick = true;
+        joystickCentralizado = false;
+      }
+      else if (eixoX > 700) {
+        atual += 2;
+        usouJoystick = true;
+        joystickCentralizado = false;
+      }
+
+
+    } else {
+
+
+      if (eixoY < 300) {
+        atual -= 3;
+        usouJoystick = true;
+        joystickCentralizado = false;
+      }
+      else if (eixoY > 700) {
+        atual += 3;
+        usouJoystick = true;
+        joystickCentralizado = false;
+      }
+    }
+  }
+
+
+  // Botao A: diminui 1
+  if (cliqueA) {
+    if (atual > 1){
+      atual--;
+      usouBotao = true;
+    }
+    else if (atual == 1){
+      atual = 6;
+    }
+
+
+  }
+
+
+  // Botao B: aumenta 1
+  if (cliqueB) {
+    atual++;
+    usouBotao = true;
+  }
+
+
+  // Mantem numero entre 0 e 9
+  if (atual > 9) atual = 9;
+  if (atual < 0) atual = 7;
+
+
+  Display(atual);
+
+
+  // Conclusao exige joystick e botoes
+  if (atual == 0 &&
+      usouJoystick &&
+      usouBotao) {
+    concluirFase();
+  }
+}
+// ----------------------------------------
+// SETUP
+// ----------------------------------------
+
+
+void setup() {
+
+
+  Serial.begin(9600);
+  pinMode(joyX, INPUT);
+  pinMode(joyY, INPUT);
+  pinMode(joyButton, INPUT_PULLUP);
+
+
+
+
+  pinMode(SEG_A, OUTPUT);
+  pinMode(SEG_B, OUTPUT);
+  pinMode(SEG_C, OUTPUT);
+  pinMode(SEG_D, OUTPUT);
+  pinMode(SEG_E, OUTPUT);
+  pinMode(SEG_F, OUTPUT);
+  pinMode(SEG_G, OUTPUT);
+
+
+  pinMode(btX, INPUT);
+  pinMode(btA, INPUT);
+  pinMode(btB, INPUT);
+
+
+  lcd.init();
+  lcd.backlight();
+
+
+  iniciarFase();
+}
+
+
+// ----------------------------------------
+// LOOP PRINCIPAL
+// ----------------------------------------
+
+
+void loop() {
+  lerBotoes();
+  Serial.println(analogRead(joyX));
+  Serial.println(analogRead(joyY));
+ 
+
+
+  if (concluida) {
+    menuConclusao();
+    return;
+  }
+
+
+  switch (contFase) {
+
+
+    case 1:
+      fase_1();
+      break;
+
+
+    case 2:
+      fase_2();
+      break;
+
+
+    case 3:
+      fase_3();
+      break;
+
+
+    case 4:
+      fase_4();
+      break;
+
+
+    case 5:
+      fase_5();
+      break;
+
+
+    case 6:
+      fase_6();
+      break;
+
+
+  }
+}
+
+
+
